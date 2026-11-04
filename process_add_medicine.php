@@ -19,6 +19,19 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     header("Location: add_medicine.php");
     exit();
 }
+// --- DUPLICATE CHECK LOGIC START ---
+    $check_stmt = $conn->prepare("SELECT id FROM medicines WHERE medicine_name = ? AND pharmacy_id = ?");
+    $check_stmt->bind_param("si", $medicine_name, $pharmacy_id);
+    $check_stmt->execute();
+    $check_result = $check_stmt->get_result();
+
+    if($check_result->num_rows > 0) {
+        $check_stmt->close();
+        $_SESSION['error'] = "This medicine already exists in your inventory!";
+        header("Location: add_medicine.php");
+        exit();
+    }
+    $check_stmt->close();
 //'$conn->prepare()' = SQL query ko compile karta hai security maintain rakhne ke liye
 $stmt = $conn->prepare("INSERT INTO medicines (pharmacy_id, medicine_name, category, price, stock_quantity, description ) VALUES (?,?,?,?,?,?)");
 $stmt->bind_param("issdis", $pharmacy_id, $medicine_name, $category, $price, $stock_quantity, $description);

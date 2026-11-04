@@ -79,10 +79,22 @@
         background-color: #218838;
     }
     .alert-error {
-        background-color: #f8d7da;
-        color: #842029;
-        padding: 10px;
-        margin-bottom: 15px;
-        border: 1px solid #f5c2c7;
-        border-radius: 4px;
-    }
+    background-color: #f8d7da;
+    color: #842029;
+    padding: 12px 20px;
+    margin-bottom: 20px;
+    border: 1px solid #f5c2c7;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+}
+
+.btn-close-alert {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: #842029;
+}

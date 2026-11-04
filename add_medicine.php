@@ -10,12 +10,23 @@ require_once'includes/navbar.php';
 ?>
 <link rel="stylesheet" href="Style/add_medicine.css">
 <div class="container my-5">
-    <?php if(isset($_SESSION['error'])):?>
-        <div class="alert-error">
-            <?htmlspecialchars($_SESSION['error']); ?>
-        </div>
-        <?php unset($_SESSION['error']);?>
-    <?php endif; ?>
+  <?php if(isset($_SESSION['error'])): ?>
+    <div id="error-alert" class="alert-error">
+        <span><?= htmlspecialchars($_SESSION['error']); ?></span>
+        <!-- Added class="btn-close-alert" here -->
+        <button type="button" class="btn-close-alert" onclick="this.parentElement.style.display='none';">&times;</button>
+    </div>
+    <script>
+    setTimeout(function() {
+        var alertBox = document.getElementById('error-alert');
+        if (alertBox) {
+            alertBox.style.display = 'none';
+        }
+    }, 3000);
+    </script>
+    <?php unset($_SESSION['error']); ?>
+<?php endif; ?>
+
 
     <div class="form-card">
         <div class="form-header">

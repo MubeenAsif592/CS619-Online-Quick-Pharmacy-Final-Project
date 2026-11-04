@@ -26,7 +26,7 @@ $stmt->bind_param("issdis", $pharmacy_id, $medicine_name, $category, $price, $st
 //Execute query check
 if($stmt->execute()){
     $_SESSION['success'] = "Medicine added to inventory successfully!";
-    header("Location: add_medicine.php");
+    header("Location: manage_inventory.php");
     exit();
 }else{
     $_SESSION['error'] = "Database error: Could not add medicine.";
@@ -41,4 +41,5 @@ $conn->close();
     header("Location: add_medicine.php");
     exit();
 }
+
 ?>

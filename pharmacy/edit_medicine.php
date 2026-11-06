@@ -2,22 +2,30 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-require_once 'includes/db.php';
+require_once '../includes/db.php';
 
 if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
+    header("Location: ../login.php");
     exit();
 }
 
-require_once 'includes/auth_check.php';
+require_once '../includes/auth_check.php';
 check_role(['pharmacy']);
 
-$pharmacy_id = $_SESSION['user_id'];
+$user_id = $_SESSION['user_id'];
 
 if (!isset($_GET['id']) || empty($_GET['id'])) {
     header("Location: manage_inventory.php");
     exit();
 }
+
+// Fetch exact pharmacy_id
+$p_stmt = $conn->prepare("SELECT id FROM pharmacies WHERE user_id = ?");
+$p_stmt->bind_param("i", $user_id);
+$p_stmt->execute();
+$p_res = $p_stmt->get_result();
+$pharmacy_id = ($p_res->num_rows > 0) ? $p_res->fetch_assoc()['id'] : 0;
+$p_stmt->close();
 
 $id = intval($_GET['id']);
 $stmt = $conn->prepare("SELECT * FROM medicines WHERE id = ? AND pharmacy_id = ?");
@@ -34,12 +42,12 @@ if ($result->num_rows === 0) {
 $medicine = $result->fetch_assoc();
 $stmt->close();
 
-require_once 'includes/header.php';
-require_once 'includes/navbar.php';
+require_once '../includes/header.php';
+require_once '../includes/navbar.php';
 ?>
 
 <!-- Using the exact same CSS stylesheet as Add Medicine -->
-<link rel="stylesheet" href="Style/add_medicine.css">
+<link rel="stylesheet" href="../Style/add_medicine.css">
 
 <div class="container my-5">
     <?php if (isset($_SESSION['error'])): ?>
@@ -94,5 +102,5 @@ require_once 'includes/navbar.php';
 
 <?php 
 $conn->close();
-require_once 'includes/footer.php'; 
+require_once '../includes/footer.php'; 
 ?>

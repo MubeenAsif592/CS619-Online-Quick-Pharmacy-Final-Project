@@ -2,19 +2,27 @@
 if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }
-include_once "includes/db.php";
+include_once "../includes/db.php";
 if (!isset($_SESSION['user_id'])) {
     $_SESSION['error'] = "Please login to access the medicine inventory.";
-    header("Location: login.php");
+    header("Location: ../login.php");
     exit();
 }
-require_once "includes/auth_check.php";
+require_once "../includes/auth_check.php";
 check_role(['pharmacy']);
 
-include_once 'includes/header.php';
-include_once 'includes/navbar.php';
+include_once '../includes/header.php';
+include_once '../includes/navbar.php';
 
-$pharmacy_id = $_SESSION['user_id'];
+$user_id = $_SESSION['user_id'];
+
+// Fetch actual pharmacy_id for logged in user
+$p_stmt = $conn->prepare("SELECT id FROM pharmacies WHERE user_id = ?");
+$p_stmt->bind_param("i", $user_id);
+$p_stmt->execute();
+$p_res = $p_stmt->get_result();
+$pharmacy_id = ($p_res->num_rows > 0) ? $p_res->fetch_assoc()['id'] : 0;
+$p_stmt->close();
 
 $find = isset($_GET['search']) ? trim($_GET['search']) : '';
 $st_filter = isset($_GET['status']) ? trim($_GET['status']) : 'all';
@@ -45,8 +53,17 @@ $stmt = $conn->prepare($q);
 $stmt->bind_param($type_str, ...$bind_params);
 $stmt->execute();
 $res = $stmt->get_result();
-
 ?>
+
+<!-- Compact Header Styling Fix -->
+<style>
+.table-custom-header th {
+    white-space: nowrap;
+    vertical-align: middle;
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+}
+</style>
 
 <div class="container mt-4">
    <!-- Success Message -->
@@ -67,7 +84,7 @@ $res = $stmt->get_result();
         <?php unset($_SESSION['error']); ?>
     <?php endif; ?>
     
-    <!--Header title & add button-->
+    <!-- Header title & add button -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="mb-0">Manage Inventory Hub</h2>
         <div>
@@ -76,10 +93,9 @@ $res = $stmt->get_result();
         </div>
     </div>
 
-    <!-- Search & filter-->
+    <!-- Search & filter -->
     <div class="card p-3 mb-4 bg-light shadow-sm">
         <form action="manage_inventory.php" method="GET" class="row g-3 align-items-center">
-
             <div class="col-md-5">
                 <input type="text" name="search" class="form-control" placeholder="Search by name or category..."
                     value="<?= htmlspecialchars($find); ?>">
@@ -88,12 +104,9 @@ $res = $stmt->get_result();
             <div class="col-md-4">
                 <select name="status" class="form-select" onchange="this.form.submit()">
                     <option value="all" <?= $st_filter === 'all' ? 'selected' : ''; ?>>All Statuses</option>
-                    <option value="available" <?= $st_filter === 'available' ? 'selected' : '' ?>>Available (> 10 items)
-                    </option>
-                    <option value="low_stock" <?= $st_filter === 'low_stock' ? 'selected' : '' ?>>Low Stock (1 - 10 items)
-                    </option>
-                    <option value="out_of_stock" <?= $st_filter === 'out_of_stock' ? 'selected' : '' ?>>Out of Stock (0
-                        items)</option>
+                    <option value="available" <?= $st_filter === 'available' ? 'selected' : '' ?>>Available (> 10 items)</option>
+                    <option value="low_stock" <?= $st_filter === 'low_stock' ? 'selected' : '' ?>>Low Stock (1 - 10 items)</option>
+                    <option value="out_of_stock" <?= $st_filter === 'out_of_stock' ? 'selected' : '' ?>>Out of Stock (0 items)</option>
                 </select>
             </div>
 
@@ -110,7 +123,7 @@ $res = $stmt->get_result();
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover table-striped mb-0 align-middle">
-                    <thead class="table-dark">
+                    <thead class="table-dark table-custom-header">
                         <tr>
                             <th>#</th>
                             <th>Medicine Name</th>
@@ -149,16 +162,16 @@ $res = $stmt->get_result();
                                         <?php endif; ?>
                                     </td>
 
-                                    <td>
+                                    <td style="white-space: nowrap;">
                                         <?php
                                         $timestamp = strtotime($data['created_at']);
-                                        echo date('g:i A, d-m-y', $timestamp);
+                                        echo date('g:i A, d-m-Y', $timestamp);
                                         ?>
                                     </td>
 
                                     <td><?= htmlspecialchars($desc); ?></td>
 
-                                    <td class="text-center">
+                                    <td class="text-center" style="white-space: nowrap;">
                                         <div class="d-inline-flex align-items-center gap-1">
                                             <a href="edit_medicine.php?id=<?= $data['id']; ?>"
                                                 class="btn btn-sm btn-outline-warning fw-bold">Edit</a>
@@ -206,5 +219,5 @@ $res = $stmt->get_result();
 $stmt->close();
 $conn->close();
 
-include_once 'includes/footer.php';
+include_once '../includes/footer.php';
 ?>

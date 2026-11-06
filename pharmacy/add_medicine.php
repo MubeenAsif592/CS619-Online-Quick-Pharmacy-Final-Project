@@ -1,14 +1,14 @@
 <?php 
 if(session_status() === PHP_SESSION_NONE){
-    session_start();;
+    session_start();
 }
 
-require_once'includes/auth_check.php';
+require_once'../includes/auth_check.php';
 check_role(['pharmacy']);
-require_once'includes/header.php';
-require_once'includes/navbar.php';
+require_once'../includes/header.php';
+require_once'../includes/navbar.php';
 ?>
-<link rel="stylesheet" href="Style/add_medicine.css">
+<link rel="stylesheet" href="../Style/add_medicine.css">
 <div class="container my-5">
   <?php if(isset($_SESSION['error'])): ?>
     <div id="error-alert" class="alert-error">
@@ -27,7 +27,6 @@ require_once'includes/navbar.php';
     <?php unset($_SESSION['error']); ?>
 <?php endif; ?>
 
-
     <div class="form-card">
         <div class="form-header">
             <h3>💊 Add New Medicine</h3>
@@ -36,14 +35,14 @@ require_once'includes/navbar.php';
         <form action="process_add_medicine.php" method="POST">
         <div class="form-group">
             <label for="medicine_name">Medicine Name <span class="required">*</span></label>
-            <input type="text" name="medicine_name" id="medicine_name" placeholder="e.g., Panadol 500mg" value="<?=  htmlspecialchars($_POST['medicine_name']?? ''); ?>" required>
+            <input type="text" name="medicine_name" id="medicine_name" placeholder="e.g., Panadol 500mg" value="<?= htmlspecialchars($_POST['medicine_name'] ?? ''); ?>" required>
         </div>
 
         <div class="form-row">
-    <!-- dropdown category-->
+            <!-- dropdown category-->
             <div class="flex-2">
                 <label for="category">Category <span class="required">*</span> </label>
-                <input type="text" name="category" id="category" placeholder="e.g., Pain Killer " value="<?=  htmlspecialchars($_POST['category']?? ''); ?>" required>
+                <input type="text" name="category" id="category" placeholder="e.g., Pain Killer " value="<?= htmlspecialchars($_POST['category'] ?? ''); ?>" required>
             </div>
 
             <div class="flex-1">
@@ -58,16 +57,16 @@ require_once'includes/navbar.php';
         </div>
 
         <!-- Description textarea-->
-         <div class="form-group">
+        <div class="form-group">
             <label for="description">Description (Optional)</label>
-            <textarea name="description" id="description" rows="3" maxlength="500" placeholder="Enter medicine details....."><?= htmlspecialchars($_POST['description']?? ''); ?></textarea>
-         </div>
+            <textarea name="description" id="description" rows="3" maxlength="500" placeholder="Enter medicine details....."><?= htmlspecialchars($_POST['description'] ?? ''); ?></textarea>
+        </div>
 
-         <button type="submit" class="btn-submit">Save Medicine</button>
+        <button type="submit" class="btn-submit">Save Medicine</button>
 
         </form>
     </div>
 </div>
 <?php
-require_once'includes/footer.php';
+require_once'../includes/footer.php';
 ?>

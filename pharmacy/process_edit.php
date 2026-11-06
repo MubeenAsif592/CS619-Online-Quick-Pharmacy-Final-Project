@@ -2,18 +2,17 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-require_once 'includes/db.php';
+require_once '../includes/db.php';
 
-// Security check
 if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
+    header("Location: ../login.php");
     exit();
 }
 
-require_once 'includes/auth_check.php';
+require_once '../includes/auth_check.php';
 check_role(['pharmacy']);
 
-$pharmacy_id = $_SESSION['user_id'];
+$user_id = $_SESSION['user_id'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = intval($_POST['id'] ?? 0);
@@ -28,6 +27,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header("Location: edit_medicine.php?id=" . $id);
         exit();
     }
+
+    // Get pharmacy_id
+    $p_stmt = $conn->prepare("SELECT id FROM pharmacies WHERE user_id = ?");
+    $p_stmt->bind_param("i", $user_id);
+    $p_stmt->execute();
+    $p_res = $p_stmt->get_result();
+    $pharmacy_id = ($p_res->num_rows > 0) ? $p_res->fetch_assoc()['id'] : 0;
+    $p_stmt->close();
 
     // Update query restricted to current pharmacy owner
     $stmt = $conn->prepare("UPDATE medicines SET medicine_name = ?, category = ?, price = ?, stock_quantity = ?, description = ? WHERE id = ? AND pharmacy_id = ?");

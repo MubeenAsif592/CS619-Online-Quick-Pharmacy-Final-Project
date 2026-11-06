@@ -35,15 +35,19 @@
             //Role based redirection routing
 
             if($user['role'] === 'pharmacy'){
-                header("Location: pharmacy_dashboard.php");
+                header("Location: pharmacy/pharmacy_dashboard.php");
                 exit();
             }elseif($user['role'] === 'rider'){
-                header("Location: rider_dashboard.php");
+                header("Location: rider/rider_dashboard.php");
                 exit();
             }elseif($user['role'] === "admin"){
-                header("Location: admin_dashboard.php");
+                header("Location: admin/admin_dashboard.php");
                 exit();
-            }else{
+            }elseif($user['role'] === "customer"){
+                header("Location: customer/customer_dashboard.php");
+                exit();
+            }
+            else{
                 header("Location: index.php");
                 exit();
             }

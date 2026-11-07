@@ -102,8 +102,7 @@ $val_stmt->close();
                         <h5 class="fw-bold mb-2">Orders Received</h5>
                         <p class="mb-0 text-white-50">View & process incoming customer orders (FR6).</p>
                     </div>
-                    <a href="#" class="btn btn-dark btn-sm mt-4 fw-bold">View Orders</a>
-                </div>
+<a href="orders.php" class="btn btn-dark btn-sm mt-4 fw-bold">View Orders</a>                </div>
             </div>
         </div>
 

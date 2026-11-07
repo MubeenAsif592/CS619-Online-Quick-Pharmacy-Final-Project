@@ -15,6 +15,7 @@ include_once '../includes/navbar.php';
 
 // Logged-in customer ka naam capture kar rahe hain
 $customer_name = $_SESSION['user_name'] ?? ($_SESSION['name'] ?? 'Customer');
+$cart_count = isset($_SESSION['cart']) ? count($_SESSION['cart']) : 0;
 ?>
 
 <div class="container my-5">
@@ -27,7 +28,7 @@ $customer_name = $_SESSION['user_name'] ?? ($_SESSION['name'] ?? 'Customer');
     <!-- Simple Main Action Modules -->
     <div class="row g-4">
         <!-- Card 1: Search & Compare Medicines (FR3 & FR4) -->
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card bg-primary text-white p-3 shadow-sm h-100">
                 <div class="card-body d-flex flex-column justify-content-between p-0">
                     <div>
@@ -39,12 +40,28 @@ $customer_name = $_SESSION['user_name'] ?? ($_SESSION['name'] ?? 'Customer');
             </div>
         </div>
 
-        <!-- Card 2: AI Medical Assistant (FR8) -->
-        <div class="col-md-4">
+        <!-- Card 2: View Cart & Orders -->
+        <div class="col-md-3">
+            <div class="card bg-dark text-white p-3 shadow-sm h-100">
+                <div class="card-body d-flex flex-column justify-content-between p-0">
+                    <div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="fw-bold mb-2">Shopping Cart</h5>
+                            <span class="badge bg-success fs-6"><?= $cart_count; ?> Items</span>
+                        </div>
+                        <p class="mb-0 text-white-50">Review selected items, update quantities, and proceed to checkout.</p>
+                    </div>
+                    <a href="cart.php" class="btn btn-success btn-sm mt-4 fw-bold">View Cart & Checkout</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 3: AI Medical Assistant (FR8) -->
+        <div class="col-md-3">
             <div class="card bg-info text-dark p-3 shadow-sm h-100">
                 <div class="card-body d-flex flex-column justify-content-between p-0">
                     <div>
-                        <h5 class="fw-bold mb-2">AI Medical Assistant</h5>
+                        <h5 class="fw-bold mb-2">AI Assistant</h5>
                         <p class="mb-0 text-dark-50">Get instant AI guidance for medicine details and medical queries.</p>
                     </div>
                     <a href="ai_chat.php" class="btn btn-dark btn-sm mt-4 fw-bold text-white">Ask AI Assistant</a>
@@ -52,8 +69,8 @@ $customer_name = $_SESSION['user_name'] ?? ($_SESSION['name'] ?? 'Customer');
             </div>
         </div>
 
-        <!-- Card 3: Customer Wallet (FR10) -->
-        <div class="col-md-4">
+        <!-- Card 4: Customer Wallet (FR10) -->
+        <div class="col-md-3">
             <div class="card bg-warning text-dark p-3 shadow-sm h-100">
                 <div class="card-body d-flex flex-column justify-content-between p-0">
                     <div>

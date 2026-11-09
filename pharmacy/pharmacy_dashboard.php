@@ -43,9 +43,9 @@ $val_stmt->close();
 
 <div class="container my-5">
     <!-- Header -->
-    <div class="mb-4">
-        <h2 class="fw-bold mb-1">Pharmacy Panel - <?= htmlspecialchars($pharmacy_name); ?></h2>
-        <p class="text-muted mb-0">Overview of inventory analytics, incoming orders, and marketing wallet.</p>
+    <div class="card bg-success text-white p-4 shadow-sm mb-4 border-0">
+        <h2 class=" fw-bold">Pharmacy Panel - <?= htmlspecialchars($pharmacy_name); ?></h2>
+        <p class="mb-0">Overview of inventory analytics, incoming orders, and marketing wallet.</p>
     </div>
 
     <!-- Live Analytics Counter Cards -->
@@ -106,7 +106,7 @@ $val_stmt->close();
             </div>
         </div>
 
-        <!-- 3. Marketing Wallet -->
+        <!-- 3. Marketing Wallet
         <div class="col-md-4">
             <div class="card bg-warning text-dark p-3 shadow-sm h-100 border-0">
                 <div class="card-body d-flex flex-column justify-content-between p-0">
@@ -117,7 +117,7 @@ $val_stmt->close();
                     <a href="#" class="btn btn-dark btn-sm mt-4 fw-bold">Manage Wallet</a>
                 </div>
             </div>
-        </div>
+        </div> -->
     </div>
 </div>
 

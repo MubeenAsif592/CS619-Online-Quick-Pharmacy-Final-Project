@@ -10,8 +10,8 @@ check_role(['admin']);
 include_once '../includes/header.php';
 include_once '../includes/navbar.php';
 
-// Fetch Pharmacies along with Owner Details and Total Listed Medicines
-$q = "SELECT p.*, u.full_name AS owner_name, u.email, 
+// Fetch Pharmacies along with Owner Details, Total Medicines, and User Registration Date safely
+$q = "SELECT p.*, u.full_name AS owner_name, u.email, u.created_at AS reg_date,
       (SELECT COUNT(*) FROM medicines m WHERE m.pharmacy_id = p.id) AS total_medicines 
       FROM pharmacies p 
       JOIN users u ON p.user_id = u.id 
@@ -38,7 +38,7 @@ $res = $conn->query($q);
                             <th>Pharmacy Name</th>
                             <th>Owner Name</th>
                             <th>Email</th>
-                            <th>Address</th>
+                            <!-- <th>Address</th> -->
                             <th class="text-center">Listed Medicines</th>
                             <th>Registration Date</th>
                         </tr>
@@ -51,11 +51,13 @@ $res = $conn->query($q);
                                 <td class="fw-bold text-primary"><?= htmlspecialchars($row['pharmacy_name']); ?></td>
                                 <td class="fw-bold"><?= htmlspecialchars($row['owner_name']); ?></td>
                                 <td><?= htmlspecialchars($row['email']); ?></td>
-                                <td class="small text-muted"><?= htmlspecialchars($row['address'] ?? 'N/A'); ?></td>
+                                <!-- <td class="small text-muted"><?= htmlspecialchars($row['address'] ?? 'Address pending update'); ?></td> -->
                                 <td class="text-center">
                                     <span class="badge bg-success fs-6"><?= $row['total_medicines']; ?> Items</span>
                                 </td>
-                                <td class="small"><?= date('d-m-Y', strtotime($row['created_at'])); ?></td>
+                                <td class="small">
+                                    <?= (!empty($row['reg_date'])) ? date('d-m-Y', strtotime($row['reg_date'])) : 'N/A'; ?>
+                                </td>
                             </tr>
                             <?php endwhile; ?>
                         <?php else: ?>

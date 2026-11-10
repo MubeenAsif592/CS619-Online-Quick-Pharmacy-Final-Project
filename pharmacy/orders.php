@@ -58,7 +58,7 @@ $orders_result = $stmt->get_result();
     <?php endif; ?>
 
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="mb-0 fw-bold">📦 Customer Incoming Orders</h2>
+        <h2 class="mb-0 fw-bold">Customer Incoming Orders</h2>
         <a href="pharmacy_dashboard.php" class="btn btn-outline-secondary fw-bold">Dashboard</a>
     </div>
 

@@ -1,4 +1,4 @@
-<!-- //eh middleware check karega ke user logged in hai ya nahi aur unauthorized access ko block karke login.php par bhej dega. -->
+<!-- yeh middleware check karega ke user logged in hai ya nahi aur unauthorized access ko block karke login.php par bhej dega. -->
 
 <?php
 if(session_status() === PHP_SESSION_NONE){

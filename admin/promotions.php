@@ -7,27 +7,37 @@ require_once '../includes/db.php';
 require_once '../includes/auth_check.php';
 check_role(['admin']);
 
-// Handle Sending Promo Credits to Customer Wallets
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['promo_amount'], $_POST['customer_id'])) {
+// Handle Sending Promo Credits
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['promo_amount'], $_POST['customer_target'])) {
     $amount = floatval($_POST['promo_amount']);
-    $target_customer = intval($_POST['customer_id']);
+    $target = $_POST['customer_target'];
     $promo_title = trim($_POST['promo_title'] ?? 'Promotional Credit Bonus');
 
-    if ($amount > 0 && $target_customer > 0) {
-        // Ensure user wallet exists and add balance
-        $upd = $conn->prepare("INSERT INTO user_wallets (user_id, balance) VALUES (?, ?) ON DUPLICATE KEY UPDATE balance = balance + ?");
-        $upd->bind_param("idd", $target_customer, $amount, $amount);
-        $upd->execute();
-        $upd->close();
+    if ($amount > 0) {
+        $target_ids = [];
+        if ($target === 'all') {
+            $c_res = $conn->query("SELECT id FROM users WHERE role = 'customer'");
+            while ($c_row = $c_res->fetch_assoc()) {
+                $target_ids[] = $c_row['id'];
+            }
+        } else {
+            $target_ids[] = intval($target);
+        }
 
-        // Record transaction
-        $t_stmt = $conn->prepare("INSERT INTO wallet_transactions (user_id, amount, type, description) VALUES (?, ?, 'credit', ?)");
-        $desc = "Promo Reward: " . $promo_title;
-        $t_stmt->bind_param("ids", $target_customer, $amount, $desc);
-        $t_stmt->execute();
-        $t_stmt->close();
+        foreach ($target_ids as $c_id) {
+            $upd = $conn->prepare("INSERT INTO user_wallets (user_id, balance) VALUES (?, ?) ON DUPLICATE KEY UPDATE balance = balance + ?");
+            $upd->bind_param("idd", $c_id, $amount, $amount);
+            $upd->execute();
+            $upd->close();
 
-        $_SESSION['success'] = "Successfully credited Rs. " . number_format($amount, 2) . " promo balance to customer wallet!";
+            $t_stmt = $conn->prepare("INSERT INTO wallet_transactions (user_id, amount, type, description) VALUES (?, ?, 'credit', ?)");
+            $desc = "Promo Reward: " . $promo_title;
+            $t_stmt->bind_param("ids", $c_id, $amount, $desc);
+            $t_stmt->execute();
+            $t_stmt->close();
+        }
+
+        $_SESSION['success'] = "Successfully distributed Rs. " . number_format($amount, 2) . " promo balance to " . count($target_ids) . " customer(s)!";
     }
     header("Location: promotions.php");
     exit();
@@ -36,7 +46,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['promo_amount'], $_POS
 include_once '../includes/header.php';
 include_once '../includes/navbar.php';
 
-// Fetch all Customers for selection
 $customers = $conn->query("SELECT id, full_name, email FROM users WHERE role = 'customer' ORDER BY full_name ASC");
 ?>
 
@@ -62,9 +71,11 @@ $customers = $conn->query("SELECT id, full_name, email FROM users WHERE role = '
         <form action="promotions.php" method="POST">
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label fw-bold">Select Customer</label>
-                    <select name="customer_id" class="form-select" required>
-                        <option value="">-- Choose Customer --</option>
+                    <label class="form-label fw-bold">Select Recipient(s)</label>
+                    <select name="customer_target" class="form-select" required>
+                        <option value="">-- Choose Target --</option>
+                        <option value="all" class="fw-bold text-success">🌟 ALL REGISTERED CUSTOMERS (BULK)</option>
+                        <option disabled>------------------------------------</option>
                         <?php if ($customers && $customers->num_rows > 0): ?>
                             <?php while ($c = $customers->fetch_assoc()): ?>
                                 <option value="<?= $c['id']; ?>"><?= htmlspecialchars($c['full_name']); ?> (<?= htmlspecialchars($c['email']); ?>)</option>

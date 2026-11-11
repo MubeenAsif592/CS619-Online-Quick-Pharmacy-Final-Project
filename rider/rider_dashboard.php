@@ -19,19 +19,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_id'], $_POST['a
     $action = trim($_POST['action']);
 
     if ($action === 'accept') {
-        // Update Order status and assign rider ID
         $u = $conn->prepare("UPDATE orders SET order_status = 'out for delivery', rider_id = ? WHERE id = ?");
         $u->bind_param("ii", $rider_id, $order_id);
         if ($u->execute()) {
-            $_SESSION['active_rider_order_id'] = $order_id; // Save in session for instant UI lock
-            $_SESSION['success'] = "Order #ORD-" . $order_id . " accepted! Active navigation box ready.";
+            $_SESSION['active_rider_order_id'] = $order_id;
+            $_SESSION['success'] = "Order #ORD-" . $order_id . " accepted! Live GPS navigation active.";
         }
         $u->close();
     } elseif ($action === 'delivered') {
         $u = $conn->prepare("UPDATE orders SET order_status = 'delivered' WHERE id = ?");
         $u->bind_param("i", $order_id);
         if ($u->execute()) {
-            unset($_SESSION['active_rider_order_id']); // Clear active session
+            unset($_SESSION['active_rider_order_id']);
             $_SESSION['success'] = "Order #ORD-" . $order_id . " successfully marked as Delivered!";
         }
         $u->close();
@@ -40,15 +39,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_id'], $_POST['a
     exit();
 }
 
-// 1. Fetch Active Order for this Rider (via Session OR Database status)
+// 1. Fetch Active Order for this Rider
 $active_order = null;
-
-// Query database for active order assigned to this rider
 $active_query = "SELECT o.*, u.full_name AS customer_name, u.phone AS customer_phone, p.pharmacy_name, p.address AS pharmacy_address 
                 FROM orders o 
                 JOIN users u ON o.customer_id = u.id 
                 JOIN pharmacies p ON o.pharmacy_id = p.id 
-                WHERE o.rider_id = $rider_id AND LOWER(o.order_status) NOT IN ('delivered', 'pending', 'dispatched') 
+                WHERE o.rider_id = $rider_id AND LOWER(o.order_status) = 'out for delivery' 
                 ORDER BY o.id DESC LIMIT 1";
 
 $active_res = $conn->query($active_query);
@@ -56,24 +53,24 @@ $active_res = $conn->query($active_query);
 if ($active_res && $active_res->num_rows > 0) {
     $active_order = $active_res->fetch_assoc();
 } elseif (isset($_SESSION['active_rider_order_id'])) {
-    // Session fallback if status text in DB has casing issues
     $sess_ord_id = intval($_SESSION['active_rider_order_id']);
     $fallback_res = $conn->query("SELECT o.*, u.full_name AS customer_name, u.phone AS customer_phone, p.pharmacy_name, p.address AS pharmacy_address 
-                                 FROM orders o 
-                                 JOIN users u ON o.customer_id = u.id 
-                                 JOIN pharmacies p ON o.pharmacy_id = p.id 
-                                 WHERE o.id = $sess_ord_id AND LOWER(o.order_status) != 'delivered'");
+                                  FROM orders o 
+                                  JOIN users u ON o.customer_id = u.id 
+                                  JOIN pharmacies p ON o.pharmacy_id = p.id 
+                                  WHERE o.id = $sess_ord_id AND LOWER(o.order_status) != 'delivered'");
     if ($fallback_res && $fallback_res->num_rows > 0) {
         $active_order = $fallback_res->fetch_assoc();
     }
 }
 
-// 2. Fetch Available Pending/Dispatched Orders for pickup list
+// 2. Fetch Available Dispatched Orders (Either specifically assigned to this rider OR unassigned)
 $pending_query = "SELECT o.*, u.full_name AS customer_name, u.phone AS customer_phone, p.pharmacy_name, p.address AS pharmacy_address 
                   FROM orders o 
                   JOIN users u ON o.customer_id = u.id 
                   JOIN pharmacies p ON o.pharmacy_id = p.id 
-                  WHERE LOWER(o.order_status) IN ('pending', 'dispatched') OR o.order_status IS NULL
+                  WHERE (LOWER(o.order_status) = 'dispatched' OR LOWER(o.order_status) = 'pending') 
+                    AND (o.rider_id = $rider_id OR o.rider_id IS NULL)
                   ORDER BY o.id DESC";
 $pending_orders = $conn->query($pending_query);
 ?>
@@ -93,7 +90,7 @@ $pending_orders = $conn->query($pending_query);
         <p class="mb-0 text-white-50">Manage active deliveries and turn-by-turn route directions.</p>
     </div>
 
-    <!-- 🚨 PROMINENT ACTIVE DELIVERY BOX FOR RIDER 🚨 -->
+    <!-- Active Delivery Box -->
     <?php if ($active_order): ?>
         <div class="card border-primary shadow-lg mb-5" style="border-width: 2px;">
             <div class="card-header bg-primary text-white py-3 d-flex justify-content-between align-items-center">
@@ -103,7 +100,6 @@ $pending_orders = $conn->query($pending_query);
             <div class="card-body p-4 bg-light">
                 <div class="row g-4 align-items-center">
                     
-                    <!-- Customer Destination Column -->
                     <div class="col-md-6 border-end">
                         <div class="bg-white p-3 rounded shadow-sm border mb-3">
                             <h6 class="text-uppercase text-danger fw-bold mb-2">📍 Customer Delivery Destination</h6>
@@ -114,19 +110,17 @@ $pending_orders = $conn->query($pending_query);
                             <p class="mb-0 text-dark"><strong>Exact Address:</strong> <?= htmlspecialchars($active_order['delivery_address']); ?></p>
                         </div>
                         
-                        <!-- GOOGLE MAPS NAVIGATION BUTTON -->
                         <a href="https://www.google.com/maps/search/?api=1&query=<?= urlencode($active_order['delivery_address']); ?>" target="_blank" class="btn btn-danger btn-lg fw-bold w-100 shadow">
                             🗺️ Open Route in Google Maps
                         </a>
                     </div>
 
-                    <!-- Pickup & Completion Column -->
                     <div class="col-md-6">
                         <div class="bg-white p-3 rounded shadow-sm border mb-3">
                             <h6 class="text-uppercase text-muted fw-bold mb-2">🏪 Pickup Pharmacy Store</h6>
                             <h5 class="fw-bold text-primary mb-1"><?= htmlspecialchars($active_order['pharmacy_name']); ?></h5>
                             <p class="text-muted small mb-2"><?= htmlspecialchars($active_order['pharmacy_address'] ?? 'Store Location'); ?></p>
-                            <h4 class="text-success fw-bold mb-0">Collect Cash: Rs. <?= number_format((float)$active_order['total_amount'], 2); ?></h4>
+                            <h4 class="text-success fw-bold mb-0">Collect Amount: Rs. <?= number_format((float)$active_order['total_amount'], 2); ?></h4>
                         </div>
 
                         <form action="rider_dashboard.php" method="POST" class="m-0">
@@ -142,7 +136,7 @@ $pending_orders = $conn->query($pending_query);
         </div>
     <?php endif; ?>
 
-    <!-- AVAILABLE ORDERS TABLE -->
+    <!-- Available Orders Table -->
     <div class="card shadow-sm border-0">
         <div class="card-header bg-secondary text-white py-3">
             <h5 class="mb-0 fw-bold">📋 Available Delivery Orders</h5>
@@ -199,7 +193,6 @@ $pending_orders = $conn->query($pending_query);
 
 <?php if ($active_order): ?>
 <script>
-// Auto Broadcast GPS to Customer Live Map
 const activeOrderId = <?= $active_order['id']; ?>;
 
 if ("geolocation" in navigator) {
@@ -211,7 +204,6 @@ if ("geolocation" in navigator) {
                 body: JSON.stringify({ order_id: activeOrderId, lat: pos.coords.latitude, lng: pos.coords.longitude })
             });
         }, err => {
-            // Simulated location fallback for testing (Lahore)
             fetch('update_location.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

@@ -231,7 +231,7 @@ include_once '../includes/navbar.php';
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
             <h2 class="fw-bold mb-1">🤖 AI Medical Assistant</h2>
-            <p class="text-muted mb-0">Powered by OpenRouter / AI API for medical guidance (FR8).</p>
+            <p class="text-muted mb-0">Powered by OpenRouter / AI API for medical guidance .</p>
         </div>
         <div>
             <a href="ai_chat.php?action=clear" class="btn btn-outline-danger btn-sm me-2 fw-bold">Clear Chat</a>

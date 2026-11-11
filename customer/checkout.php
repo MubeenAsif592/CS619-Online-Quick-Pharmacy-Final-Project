@@ -7,9 +7,6 @@ require_once '../includes/db.php';
 require_once '../includes/auth_check.php';
 check_role(['customer']);
 
-include_once '../includes/header.php';
-include_once '../includes/navbar.php';
-
 $cart_items = $_SESSION['cart'] ?? [];
 if (empty($cart_items)) {
     header("Location: cart.php");
@@ -19,7 +16,7 @@ if (empty($cart_items)) {
 $customer_id = $_SESSION['user_id'];
 $wallet_balance = 0.00;
 
-// Safe Dynamic Balance Calculation
+// Dynamic Safe Wallet Balance Calculation
 try {
     $bal_stmt = $conn->prepare("SELECT 
         (IFNULL(SUM(CASE WHEN LOWER(type) = 'credit' THEN amount ELSE 0 END), 0) - 
@@ -36,31 +33,62 @@ try {
     $wallet_balance = 0.00;
 }
 
-// Fallback to user_wallets table if calculated balance is 0
-if ($wallet_balance <= 0.00) {
-    try {
-        $w_stmt = $conn->prepare("SELECT balance FROM user_wallets WHERE user_id = ?");
-        if ($w_stmt) {
-            $w_stmt->bind_param("i", $customer_id);
-            $w_stmt->execute();
-            $w_res = $w_stmt->get_result();
-            if ($w_res && $w_res->num_rows > 0) {
-                $wallet_balance = floatval($w_res->fetch_assoc()['balance']);
-            }
-            $w_stmt->close();
+// Calculate Grand Total
+$subtotal = 0;
+foreach ($cart_items as $item) {
+    $subtotal += ($item['price'] * $item['quantity']);
+}
+
+// Handle Promo Code Apply Action
+$applied_discount = 0.00;
+$discount_percent = 0;
+$promo_code_input = '';
+
+if (isset($_POST['apply_promo']) && !empty($_POST['promo_code'])) {
+    $promo_code_input = strtoupper(trim($_POST['promo_code']));
+    $cp_chk = $conn->prepare("SELECT discount_percentage FROM campaigns WHERE promo_code = ? AND is_active = 1");
+    if ($cp_chk) {
+        $cp_chk->bind_param("s", $promo_code_input);
+        $cp_chk->execute();
+        $cp_res = $cp_chk->get_result();
+        if ($cp_res && $cp_res->num_rows > 0) {
+            $discount_percent = floatval($cp_res->fetch_assoc()['discount_percentage']);
+            $applied_discount = ($subtotal * $discount_percent) / 100;
+            $_SESSION['applied_promo'] = [
+                'code' => $promo_code_input,
+                'discount' => $applied_discount,
+                'percent' => $discount_percent
+            ];
+            $_SESSION['success'] = "Promo Code '" . $promo_code_input . "' applied! You saved " . $discount_percent . "% (Rs. " . number_format($applied_discount, 2) . ").";
+        } else {
+            unset($_SESSION['applied_promo']);
+            $_SESSION['error'] = "Invalid or expired promo code.";
         }
-    } catch (Throwable $e) {
-        $wallet_balance = 0.00;
+        $cp_chk->close();
     }
 }
 
-$grand_total = 0;
-foreach ($cart_items as $item) {
-    $grand_total += ($item['price'] * $item['quantity']);
+if (isset($_SESSION['applied_promo'])) {
+    $promo_code_input = $_SESSION['applied_promo']['code'];
+    $applied_discount = $_SESSION['applied_promo']['discount'];
+    $discount_percent = $_SESSION['applied_promo']['percent'];
 }
+
+$grand_total = max(0, $subtotal - $applied_discount);
+
+include_once '../includes/header.php';
+include_once '../includes/navbar.php';
 ?>
 
 <div class="container my-4" style="max-width: 800px;">
+    <?php if (isset($_SESSION['success'])): ?>
+        <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+            <?= htmlspecialchars($_SESSION['success']); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        <?php unset($_SESSION['success']); ?>
+    <?php endif; ?>
+
     <?php if (isset($_SESSION['error'])): ?>
         <div class="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
             <?= htmlspecialchars($_SESSION['error']); ?>
@@ -74,17 +102,29 @@ foreach ($cart_items as $item) {
         <a href="cart.php" class="btn btn-outline-secondary fw-bold">Back to Cart</a>
     </div>
 
-    <div class="card shadow-sm p-4 border-0">
+    <div class="card shadow-sm p-4 border-0 mb-4">
+        <!-- 1. Promo Code Section -->
+        <h5 class="fw-bold mb-3 border-bottom pb-2">1. Have a Promo Code? (FR9)</h5>
+        <form action="checkout.php" method="POST" class="row g-2 mb-4">
+            <input type="hidden" name="apply_promo" value="1">
+            <div class="col-8 col-md-9">
+                <input type="text" name="promo_code" class="form-control text-uppercase" placeholder="Enter Promo Code (e.g. QUICK10)" value="<?= htmlspecialchars($promo_code_input); ?>" required>
+            </div>
+            <div class="col-4 col-md-3">
+                <button type="submit" class="btn btn-outline-primary fw-bold w-100">Apply</button>
+            </div>
+        </form>
+
         <form action="process_checkout.php" method="POST">
-            <!-- 1. Delivery Address -->
-            <h5 class="fw-bold mb-3 border-bottom pb-2">1. Delivery Information</h5>
+            <!-- 2. Delivery Address -->
+            <h5 class="fw-bold mb-3 border-bottom pb-2">2. Delivery Information</h5>
             <div class="mb-3">
                 <label class="form-label fw-bold">Delivery Address <span class="text-danger">*</span></label>
                 <textarea name="delivery_address" class="form-control" rows="3" placeholder="Enter complete home/office address..." required></textarea>
             </div>
 
-            <!-- 2. Payment Method -->
-            <h5 class="fw-bold mb-3 border-bottom pb-2 mt-4">2. Select Payment Method</h5>
+            <!-- 3. Payment Method -->
+            <h5 class="fw-bold mb-3 border-bottom pb-2 mt-4">3. Select Payment Method</h5>
             <div class="row g-3 mb-4">
                 <div class="col-md-6">
                     <div class="form-check card p-3 h-100 border shadow-sm">
@@ -111,8 +151,8 @@ foreach ($cart_items as $item) {
                 </div>
             </div>
 
-            <!-- 3. Summary -->
-            <h5 class="fw-bold mb-3 border-bottom pb-2">3. Order Summary</h5>
+            <!-- 4. Summary -->
+            <h5 class="fw-bold mb-3 border-bottom pb-2">4. Order Summary</h5>
             <ul class="list-group mb-3">
                 <?php foreach ($cart_items as $item): ?>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
@@ -123,6 +163,19 @@ foreach ($cart_items as $item) {
                         <span class="fw-bold text-success">Rs. <?= number_format($item['price'] * $item['quantity'], 2); ?></span>
                     </li>
                 <?php endforeach; ?>
+                
+                <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
+                    <span>Subtotal</span>
+                    <span>Rs. <?= number_format($subtotal, 2); ?></span>
+                </li>
+
+                <?php if ($applied_discount > 0): ?>
+                    <li class="list-group-item d-flex justify-content-between align-items-center bg-light text-success fw-bold">
+                        <span>Promo Discount (<?= $discount_percent; ?>%)</span>
+                        <span>- Rs. <?= number_format($applied_discount, 2); ?></span>
+                    </li>
+                <?php endif; ?>
+
                 <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
                     <span class="fw-bold fs-5">Total Amount Payable</span>
                     <strong class="text-success fs-5">Rs. <?= number_format($grand_total, 2); ?></strong>

@@ -31,7 +31,7 @@ $wallet_res = $conn->query("SELECT wt.*, u.full_name, u.email
 <div class="container my-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 class="fw-bold mb-1">📊 System Reports & Analytics (FR14)</h2>
+            <h2 class="fw-bold mb-1">📊 System Reports & Analytics</h2>
             <p class="text-muted mb-0">Sales performance, inventory stock levels, wallet logs, and delivery metrics.</p>
         </div>
         <a href="admin_dashboard.php" class="btn btn-outline-secondary fw-bold">Dashboard</a>

@@ -31,7 +31,7 @@ $reviews = $conn->query("SELECT r.*, u.full_name AS customer_name
 <div class="container my-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 class="fw-bold mb-1">⭐ Customer Ratings & Reviews (FR15)</h2>
+            <h2 class="fw-bold mb-1">⭐ Customer Ratings & Reviews</h2>
             <p class="text-muted mb-0">Feedback submitted by customers for <?= htmlspecialchars($pharmacy['pharmacy_name'] ?? 'your pharmacy'); ?>.</p>
         </div>
         <a href="pharmacy_dashboard.php" class="btn btn-outline-secondary fw-bold">Dashboard</a>

@@ -1,15 +1,13 @@
 <?php
 ob_start();
 
-// Session status check
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Includes based on project structure
 require_once '../includes/db.php';
 
-// Handle Add to Cart action via POST with selected quantity
+// Handle Add to Cart action via POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_to_cart_id'])) {
     $med_id = intval($_POST['add_to_cart_id']);
     $qty_input = isset($_POST['quantity']) ? intval($_POST['quantity']) : 1;
@@ -62,31 +60,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_to_cart_id'])) {
 require_once '../includes/header.php';
 require_once '../includes/navbar.php';
 
-// Capture Search Query
 $find = isset($_GET['search']) ? trim($_GET['search']) : '';
 $medicines = [];
 
-// Base Query: JOIN medicines with pharmacies & users table to get live pharmacy name
 if (!empty($find)) {
     $q = "SELECT m.*, COALESCE(p.pharmacy_name, u.full_name) AS pharmacy_name 
           FROM medicines m 
-          JOIN pharmacies p ON m.pharmacy_id = p.id 
-          JOIN users u ON p.user_id = u.id 
+          LEFT JOIN pharmacies p ON m.pharmacy_id = p.id 
+          LEFT JOIN users u ON p.user_id = u.id 
           WHERE m.medicine_name LIKE ? 
              OR m.category LIKE ? 
              OR m.description LIKE ? 
+             OR m.active_ingredient LIKE ?
           ORDER BY m.price ASC";
           
     $stmt = $conn->prepare($q);
     $like_val = "%" . $find . "%";
-    $stmt->bind_param("sss", $like_val, $like_val, $like_val);
+    $stmt->bind_param("ssss", $like_val, $like_val, $like_val, $like_val);
     $stmt->execute();
     $res = $stmt->get_result();
 } else {
     $q = "SELECT m.*, COALESCE(p.pharmacy_name, u.full_name) AS pharmacy_name 
           FROM medicines m 
-          JOIN pharmacies p ON m.pharmacy_id = p.id 
-          JOIN users u ON p.user_id = u.id 
+          LEFT JOIN pharmacies p ON m.pharmacy_id = p.id 
+          LEFT JOIN users u ON p.user_id = u.id 
           ORDER BY m.id DESC LIMIT 20";
     $res = $conn->query($q);
 }
@@ -101,7 +98,6 @@ $cart_count = isset($_SESSION['cart']) ? count($_SESSION['cart']) : 0;
 ?>
 
 <style>
-/* Custom Quantity Selector Styling */
 .quantity-input-group {
     display: inline-flex;
     align-items: center;
@@ -117,28 +113,20 @@ $cart_count = isset($_SESSION['cart']) ? count($_SESSION['cart']) : 0;
     cursor: pointer;
     user-select: none;
 }
-.qty-btn:hover {
-    background-color: #e2e6ea;
-}
+.qty-btn:hover { background-color: #e2e6ea; }
 .qty-input {
     width: 45px;
     text-align: center;
     border: none;
     font-weight: bold;
 }
-.qty-input::-webkit-inner-spin-button, 
-.qty-input::-webkit-outer-spin-button { 
-    -webkit-appearance: none; 
-    margin: 0; 
-}
 </style>
 
 <div class="container my-4">
-    <!-- Feedback Alerts -->
     <?php if (isset($_SESSION['success'])): ?>
         <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
             <?= htmlspecialchars($_SESSION['success']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
         <?php unset($_SESSION['success']); ?>
     <?php endif; ?>
@@ -146,25 +134,24 @@ $cart_count = isset($_SESSION['cart']) ? count($_SESSION['cart']) : 0;
     <?php if (isset($_SESSION['error'])): ?>
         <div class="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
             <?= htmlspecialchars($_SESSION['error']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
         <?php unset($_SESSION['error']); ?>
     <?php endif; ?>
 
-    <!-- Header Title & Cart/Dashboard Link -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="mb-0 fw-bold">Search & Compare Medicines</h2>
+        <h2 class="mb-0 fw-bold">🔍 Search & Compare Medicines</h2>
         <div>
             <a href="cart.php" class="btn btn-success fw-bold me-2">🛒 View Cart (<?= $cart_count; ?>)</a>
             <a href="customer_dashboard.php" class="btn btn-outline-secondary fw-bold">Dashboard</a>
         </div>
     </div>
 
-    <!-- Search Form Bar -->
+    <!-- Search Form -->
     <div class="card p-3 mb-4 bg-light shadow-sm">
         <form action="customer_search.php" method="GET" class="row g-2 align-items-center">
             <div class="col-md-9">
-                <input type="text" name="search" class="form-control" placeholder="Search by name, category, or symptom (e.g. Panadol, Pain Relief)..." value="<?= htmlspecialchars($find); ?>">
+                <input type="text" name="search" class="form-control" placeholder="Search by name, category, formula or symptom (e.g. Paracetamol, Panadol)..." value="<?= htmlspecialchars($find); ?>">
             </div>
             <div class="col-md-3 d-flex gap-2">
                 <button type="submit" class="btn btn-success w-100 fw-bold">Search</button>
@@ -184,7 +171,7 @@ $cart_count = isset($_SESSION['cart']) ? count($_SESSION['cart']) : 0;
                         <tr>
                             <th>#</th>
                             <th>Medicine Name</th>
-                            <th>Category</th>
+                            <th>Category / Formula</th>
                             <th>Pharmacy Name</th>
                             <th>Price (PKR)</th>
                             <th>Stock Status</th>
@@ -198,10 +185,16 @@ $cart_count = isset($_SESSION['cart']) ? count($_SESSION['cart']) : 0;
                             $sr_no = 1;
                             foreach ($medicines as $med): 
                                 $qty = (int)($med['stock_quantity'] ?? 0);
+                                $ingredient = $med['active_ingredient'] ?? '';
                             ?>
                             <tr>
                                 <td><?= $sr_no++; ?></td>
-                                <td class="fw-bold"><?= htmlspecialchars($med['medicine_name']); ?></td>
+                                <td>
+                                    <strong class="d-block"><?= htmlspecialchars($med['medicine_name']); ?></strong>
+                                    <?php if (!empty($ingredient)): ?>
+                                        <small class="text-muted">Formula: <?= htmlspecialchars($ingredient); ?></small>
+                                    <?php endif; ?>
+                                </td>
                                 <td><span class="badge bg-secondary"><?= htmlspecialchars($med['category']); ?></span></td>
                                 <td class="fw-bold text-primary"><?= htmlspecialchars($med['pharmacy_name'] ?? 'Pharmacy'); ?></td>
                                 <td class="text-success fw-bold">Rs. <?= number_format((float)$med['price'], 2); ?></td>
@@ -209,13 +202,12 @@ $cart_count = isset($_SESSION['cart']) ? count($_SESSION['cart']) : 0;
                                     <?php if ($qty <= 0): ?>
                                         <span class="badge bg-danger">Out of Stock</span>
                                     <?php elseif ($qty <= 10): ?>
-                                        <span class="badge bg-warning text-dark">Low Stock (<?= $qty; ?> units)</span>
+                                        <span class="badge bg-warning text-dark">Low Stock (<?= $qty; ?>)</span>
                                     <?php else: ?>
-                                        <span class="badge bg-success">In Stock (<?= $qty; ?> units)</span>
+                                        <span class="badge bg-success">In Stock (<?= $qty; ?>)</span>
                                     <?php endif; ?>
                                 </td>
                                 
-                                <!-- Form wrapper for row item action -->
                                 <?php if ($qty > 0): ?>
                                     <form action="customer_search.php" method="POST" class="m-0 p-0">
                                         <input type="hidden" name="add_to_cart_id" value="<?= $med['id']; ?>">
@@ -235,7 +227,14 @@ $cart_count = isset($_SESSION['cart']) ? count($_SESSION['cart']) : 0;
                                 <?php else: ?>
                                     <td class="text-center text-muted">-</td>
                                     <td class="text-center">
-                                        <button class="btn btn-sm btn-secondary fw-bold" disabled>Unavailable</button>
+                                        <!-- Alternate Medicine Suggestion Trigger (FR5) -->
+                                        <?php if (!empty($ingredient)): ?>
+                                            <a href="customer_search.php?search=<?= urlencode($ingredient); ?>" class="btn btn-sm btn-warning fw-bold text-dark" title="Find same active ingredient substitute">
+                                                🔄 Find Alternates
+                                            </a>
+                                        <?php else: ?>
+                                            <button class="btn btn-sm btn-secondary fw-bold" disabled>Unavailable</button>
+                                        <?php endif; ?>
                                     </td>
                                 <?php endif; ?>
                             </tr>
@@ -256,29 +255,21 @@ $cart_count = isset($_SESSION['cart']) ? count($_SESSION['cart']) : 0;
     </div>
 </div>
 
-<!-- JavaScript Controls for Quantity +/- -->
 <script>
 function decrementQty(btn) {
     let input = btn.parentNode.querySelector('.qty-input');
     let val = parseInt(input.value) || 1;
-    if (val > 1) {
-        input.value = val - 1;
-    }
+    if (val > 1) { input.value = val - 1; }
 }
-
 function incrementQty(btn, maxStock) {
     let input = btn.parentNode.querySelector('.qty-input');
     let val = parseInt(input.value) || 1;
-    if (val < maxStock) {
-        input.value = val + 1;
-    }
+    if (val < maxStock) { input.value = val + 1; }
 }
 </script>
 
 <?php
-if (isset($stmt)) {
-    $stmt->close();
-}
+if (isset($stmt)) { $stmt->close(); }
 $conn->close();
 include_once '../includes/footer.php';
 ob_end_flush();

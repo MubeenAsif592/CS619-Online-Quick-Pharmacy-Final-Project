@@ -24,17 +24,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $grand_total += ($item['price'] * $item['quantity']);
     }
 
-    // Wallet Balance Check
+    // Dynamic Safe Wallet Balance Verification
     if ($payment_method === 'wallet') {
-        $w_stmt = $conn->prepare("SELECT balance FROM user_wallets WHERE user_id = ?");
-        $w_stmt->bind_param("i", $customer_id);
-        $w_stmt->execute();
-        $w_res = $w_stmt->get_result();
-        $curr_balance = ($w_res && $w_res->num_rows > 0) ? floatval($w_res->fetch_assoc()['balance']) : 0;
-        $w_stmt->close();
+        $curr_balance = 0.00;
+        try {
+            $bal_stmt = $conn->prepare("SELECT 
+                (IFNULL(SUM(CASE WHEN LOWER(type) = 'credit' THEN amount ELSE 0 END), 0) - 
+                 IFNULL(SUM(CASE WHEN LOWER(type) = 'debit' THEN amount ELSE 0 END), 0)) AS calculated_balance 
+                FROM wallet_transactions WHERE user_id = ?");
+            if ($bal_stmt) {
+                $bal_stmt->bind_param("i", $customer_id);
+                $bal_stmt->execute();
+                $bal_res = $bal_stmt->get_result()->fetch_assoc();
+                $curr_balance = floatval($bal_res['calculated_balance'] ?? 0.00);
+                $bal_stmt->close();
+            }
+        } catch (Throwable $e) {
+            $curr_balance = 0.00;
+        }
+
+        if ($curr_balance <= 0.00) {
+            try {
+                $w_stmt = $conn->prepare("SELECT balance FROM user_wallets WHERE user_id = ?");
+                if ($w_stmt) {
+                    $w_stmt->bind_param("i", $customer_id);
+                    $w_stmt->execute();
+                    $w_res = $w_stmt->get_result();
+                    if ($w_res && $w_res->num_rows > 0) {
+                        $curr_balance = floatval($w_res->fetch_assoc()['balance']);
+                    }
+                    $w_stmt->close();
+                }
+            } catch (Throwable $e) {
+                $curr_balance = 0.00;
+            }
+        }
 
         if ($curr_balance < $grand_total) {
-            $_SESSION['error'] = "Insufficient wallet balance! Your balance: Rs. " . number_format($curr_balance, 2) . ", Required: Rs. " . number_format($grand_total, 2);
+            $_SESSION['error'] = "Insufficient wallet balance! Available: Rs. " . number_format($curr_balance, 2) . ", Required: Rs. " . number_format($grand_total, 2);
             header("Location: checkout.php");
             exit();
         }
@@ -54,15 +81,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $orders_by_pharmacy[$p_id]['total'] += ($item['price'] * $item['quantity']);
     }
 
-    // Start Transaction
+    // Start DB Transaction
     $conn->autocommit(FALSE);
     $transaction_success = true;
 
     foreach ($orders_by_pharmacy as $pharmacy_id => $order_data) {
         $total_amount = $order_data['total'];
 
-        // 1. Insert into `orders` table
-        $stmt = $conn->prepare("INSERT INTO orders (customer_id, pharmacy_id, total_amount, order_status, delivery_address) VALUES (?, ?, ?, 'pending', ?)");
+        // 1. Insert into orders table
+        $stmt = $conn->prepare("INSERT INTO orders (customer_id, pharmacy_id, total_amount, order_status, delivery_address, created_at) VALUES (?, ?, ?, 'pending', ?, NOW())");
         $stmt->bind_param("iids", $customer_id, $pharmacy_id, $total_amount, $delivery_address);
         
         if ($stmt->execute()) {
@@ -74,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $qty = intval($item['quantity']);
                 $unit_price = floatval($item['price']);
 
-                // 2. Insert into `order_items`
+                // 2. Insert into order_items table using unit_price column
                 $item_stmt = $conn->prepare("INSERT INTO order_items (order_id, medicine_id, quantity, unit_price) VALUES (?, ?, ?, ?)");
                 $item_stmt->bind_param("iiid", $order_id, $med_id, $qty, $unit_price);
                 if (!$item_stmt->execute()) {
@@ -82,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $item_stmt->close();
 
-                // 3. DEDUCT STOCK QUANTITY FROM `medicines` TABLE IMMEDIATELY
+                // 3. Deduct medicine stock quantity
                 $stock_stmt = $conn->prepare("UPDATE medicines SET stock_quantity = GREATEST(0, stock_quantity - ?) WHERE id = ?");
                 $stock_stmt->bind_param("ii", $qty, $med_id);
                 if (!$stock_stmt->execute()) {
@@ -91,18 +118,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stock_stmt->close();
             }
 
-            // Deduct Wallet Balance if selected
+            // 4. Deduct Wallet Balance & Log Transaction
             if ($payment_method === 'wallet' && $transaction_success) {
-                $deduct = $conn->prepare("UPDATE user_wallets SET balance = balance - ? WHERE user_id = ?");
-                $deduct->bind_param("di", $total_amount, $customer_id);
-                $deduct->execute();
-                $deduct->close();
+                try {
+                    $deduct = $conn->prepare("UPDATE user_wallets SET balance = balance - ? WHERE user_id = ?");
+                    if ($deduct) {
+                        $deduct->bind_param("di", $total_amount, $customer_id);
+                        $deduct->execute();
+                        $deduct->close();
+                    }
+                } catch (Throwable $e) {}
 
-                $t_stmt = $conn->prepare("INSERT INTO wallet_transactions (user_id, order_id, amount, type, description) VALUES (?, ?, ?, 'debit', ?)");
-                $desc = "Payment for Order #" . $order_id;
-                $t_stmt->bind_param("iids", $customer_id, $order_id, $total_amount, $desc);
-                $t_stmt->execute();
-                $t_stmt->close();
+                try {
+                    $t_stmt = $conn->prepare("INSERT INTO wallet_transactions (user_id, order_id, amount, type, description, created_at) VALUES (?, ?, ?, 'debit', ?, NOW())");
+                    if ($t_stmt) {
+                        $desc = "Payment for Order #ORD-" . $order_id;
+                        $t_stmt->bind_param("iids", $customer_id, $order_id, $total_amount, $desc);
+                        $t_stmt->execute();
+                        $t_stmt->close();
+                    }
+                } catch (Throwable $e) {}
             }
         } else {
             $transaction_success = false;

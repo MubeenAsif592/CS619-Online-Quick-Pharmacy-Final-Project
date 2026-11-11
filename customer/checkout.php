@@ -19,23 +19,39 @@ if (empty($cart_items)) {
 $customer_id = $_SESSION['user_id'];
 $wallet_balance = 0.00;
 
-// Fetch Actual Wallet Balance from Database
-$w_stmt = $conn->prepare("SELECT balance FROM user_wallets WHERE user_id = ?");
-if ($w_stmt) {
-    $w_stmt->bind_param("i", $customer_id);
-    $w_stmt->execute();
-    $w_res = $w_stmt->get_result();
-    if ($w_res && $w_res->num_rows > 0) {
-        $wallet_balance = floatval($w_res->fetch_assoc()['balance']);
-    } else {
-        // Auto-initialize with 1000.00 if user has no wallet row
-        $ins = $conn->prepare("INSERT INTO user_wallets (user_id, balance) VALUES (?, 1000.00)");
-        $ins->bind_param("i", $customer_id);
-        $ins->execute();
-        $ins->close();
-        $wallet_balance = 1000.00;
+// Safe Dynamic Balance Calculation
+try {
+    $bal_stmt = $conn->prepare("SELECT 
+        (IFNULL(SUM(CASE WHEN LOWER(type) = 'credit' THEN amount ELSE 0 END), 0) - 
+         IFNULL(SUM(CASE WHEN LOWER(type) = 'debit' THEN amount ELSE 0 END), 0)) AS calculated_balance 
+        FROM wallet_transactions WHERE user_id = ?");
+    if ($bal_stmt) {
+        $bal_stmt->bind_param("i", $customer_id);
+        $bal_stmt->execute();
+        $bal_res = $bal_stmt->get_result()->fetch_assoc();
+        $wallet_balance = floatval($bal_res['calculated_balance'] ?? 0.00);
+        $bal_stmt->close();
     }
-    $w_stmt->close();
+} catch (Throwable $e) {
+    $wallet_balance = 0.00;
+}
+
+// Fallback to user_wallets table if calculated balance is 0
+if ($wallet_balance <= 0.00) {
+    try {
+        $w_stmt = $conn->prepare("SELECT balance FROM user_wallets WHERE user_id = ?");
+        if ($w_stmt) {
+            $w_stmt->bind_param("i", $customer_id);
+            $w_stmt->execute();
+            $w_res = $w_stmt->get_result();
+            if ($w_res && $w_res->num_rows > 0) {
+                $wallet_balance = floatval($w_res->fetch_assoc()['balance']);
+            }
+            $w_stmt->close();
+        }
+    } catch (Throwable $e) {
+        $wallet_balance = 0.00;
+    }
 }
 
 $grand_total = 0;
@@ -58,7 +74,7 @@ foreach ($cart_items as $item) {
         <a href="cart.php" class="btn btn-outline-secondary fw-bold">Back to Cart</a>
     </div>
 
-    <div class="card shadow-sm p-4">
+    <div class="card shadow-sm p-4 border-0">
         <form action="process_checkout.php" method="POST">
             <!-- 1. Delivery Address -->
             <h5 class="fw-bold mb-3 border-bottom pb-2">1. Delivery Information</h5>
@@ -71,7 +87,7 @@ foreach ($cart_items as $item) {
             <h5 class="fw-bold mb-3 border-bottom pb-2 mt-4">2. Select Payment Method</h5>
             <div class="row g-3 mb-4">
                 <div class="col-md-6">
-                    <div class="form-check card p-3 h-100 border">
+                    <div class="form-check card p-3 h-100 border shadow-sm">
                         <input class="form-check-input" type="radio" name="payment_method" id="cod" value="cod" checked>
                         <label class="form-check-label fw-bold d-block" for="cod">
                             💵 Cash on Delivery (COD)
@@ -80,11 +96,16 @@ foreach ($cart_items as $item) {
                     </div>
                 </div>
                 <div class="col-md-6">
-                    <div class="form-check card p-3 h-100 border">
-                        <input class="form-check-input" type="radio" name="payment_method" id="wallet" value="wallet">
+                    <div class="form-check card p-3 h-100 border shadow-sm">
+                        <input class="form-check-input" type="radio" name="payment_method" id="wallet" value="wallet" <?= $wallet_balance < $grand_total ? 'disabled' : ''; ?>>
                         <label class="form-check-label fw-bold d-block" for="wallet">
                             💳 Pay via Digital Wallet
-                            <small class="text-success d-block fw-bold">Available Balance: Rs. <?= number_format($wallet_balance, 2); ?></small>
+                            <small class="<?= $wallet_balance >= $grand_total ? 'text-success' : 'text-danger'; ?> d-block fw-bold">
+                                Available Balance: Rs. <?= number_format($wallet_balance, 2); ?>
+                                <?php if ($wallet_balance < $grand_total): ?>
+                                    <span class="d-block text-danger font-normal small">(Insufficient Funds)</span>
+                                <?php endif; ?>
+                            </small>
                         </label>
                     </div>
                 </div>
@@ -97,7 +118,7 @@ foreach ($cart_items as $item) {
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         <div>
                             <strong class="d-block"><?= htmlspecialchars($item['name']); ?></strong>
-                            <small class="text-muted">Qty: <?= $item['quantity']; ?> | Pharmacy: <?= htmlspecialchars($item['pharmacy_name']); ?></small>
+                            <small class="text-muted">Qty: <?= $item['quantity']; ?> | Pharmacy: <?= htmlspecialchars($item['pharmacy_name'] ?? 'Pharmacy Store'); ?></small>
                         </div>
                         <span class="fw-bold text-success">Rs. <?= number_format($item['price'] * $item['quantity'], 2); ?></span>
                     </li>

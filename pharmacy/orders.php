@@ -12,45 +12,47 @@ include_once '../includes/navbar.php';
 
 $user_id = $_SESSION['user_id'];
 
-// Get exact pharmacy_id from pharmacies table
+// Get Pharmacy ID
 $p_stmt = $conn->prepare("SELECT id FROM pharmacies WHERE user_id = ?");
 $p_stmt->bind_param("i", $user_id);
 $p_stmt->execute();
-$p_res = $p_stmt->get_result();
-$pharmacy_id = ($p_res->num_rows > 0) ? $p_res->fetch_assoc()['id'] : 0;
+$pharmacy_res = $p_stmt->get_result()->fetch_assoc();
+$pharmacy_id = $pharmacy_res['id'] ?? 0;
 $p_stmt->close();
 
-// Update Order Status Logic
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_id'], $_POST['status'])) {
+// Handle Dispatch Action by Pharmacy
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_id'], $_POST['action'])) {
     $order_id = intval($_POST['order_id']);
-    $new_status = trim($_POST['status']);
-
-    $u_stmt = $conn->prepare("UPDATE orders SET order_status = ? WHERE id = ? AND pharmacy_id = ?");
-    $u_stmt->bind_param("sii", $new_status, $order_id, $pharmacy_id);
-    if ($u_stmt->execute()) {
-        $_SESSION['success'] = "Order #" . $order_id . " status updated to " . ucfirst($new_status) . ".";
+    
+    if ($_POST['action'] === 'dispatch') {
+        $u_stmt = $conn->prepare("UPDATE orders SET order_status = 'dispatched' WHERE id = ? AND pharmacy_id = ?");
+        $u_stmt->bind_param("ii", $order_id, $pharmacy_id);
+        if ($u_stmt->execute()) {
+            $_SESSION['success'] = "Order #ORD-" . $order_id . " marked as Dispatched!";
+        }
+        $u_stmt->close();
     }
-    $u_stmt->close();
     header("Location: orders.php");
     exit();
 }
 
-// Fetch Orders received for this pharmacy
-$q = "SELECT o.*, u.full_name AS customer_name 
-      FROM orders o 
-      JOIN users u ON o.customer_id = u.id 
-      WHERE o.pharmacy_id = ? 
-      ORDER BY o.id DESC";
-$stmt = $conn->prepare($q);
-$stmt->bind_param("i", $pharmacy_id);
-$stmt->execute();
-$orders_result = $stmt->get_result();
+// Fetch Incoming Orders with Assigned Rider Info
+$orders_query = "SELECT o.*, u.full_name AS customer_name, r.full_name AS rider_name, r.phone AS rider_phone 
+                FROM orders o 
+                JOIN users u ON o.customer_id = u.id 
+                LEFT JOIN users r ON o.rider_id = r.id 
+                WHERE o.pharmacy_id = ? 
+                ORDER BY o.id DESC";
+
+$o_stmt = $conn->prepare($orders_query);
+$o_stmt->bind_param("i", $pharmacy_id);
+$o_stmt->execute();
+$orders_result = $o_stmt->get_result();
 ?>
 
-<div class="container my-4">
-    <!-- Success Alert -->
+<div class="container my-5">
     <?php if (isset($_SESSION['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+        <div class="alert alert-success alert-dismissible fade show shadow-sm mb-4">
             <?= htmlspecialchars($_SESSION['success']); ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
@@ -58,11 +60,14 @@ $orders_result = $stmt->get_result();
     <?php endif; ?>
 
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="mb-0 fw-bold">Customer Incoming Orders</h2>
+        <div>
+            <h2 class="fw-bold mb-1">Customer Incoming Orders</h2>
+            <p class="text-muted mb-0">Prepare incoming orders and dispatch them for rider pickup.</p>
+        </div>
         <a href="pharmacy_dashboard.php" class="btn btn-outline-secondary fw-bold">Dashboard</a>
     </div>
 
-    <div class="card shadow-sm">
+    <div class="card shadow-sm border-0">
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
@@ -74,43 +79,65 @@ $orders_result = $stmt->get_result();
                             <th>Delivery Address</th>
                             <th>Order Date</th>
                             <th>Current Status</th>
-                            <th class="text-center">Update Status</th>
+                            <th>Assigned Rider</th>
+                            <th class="text-center">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if ($orders_result && $orders_result->num_rows > 0): ?>
                             <?php while ($ord = $orders_result->fetch_assoc()): ?>
+                            <?php $st = strtolower(trim((string)$ord['order_status'])); ?>
                             <tr>
                                 <td class="fw-bold">#ORD-<?= $ord['id']; ?></td>
                                 <td class="fw-bold"><?= htmlspecialchars($ord['customer_name']); ?></td>
-                                <td class="text-success fw-bold">Rs. <?= number_format((float)$ord['total_amount'], 2); ?></td>
-                                <td class="small text-muted"><?= htmlspecialchars($ord['delivery_address']); ?></td>
-                                <td class="small"><?= date('g:i A, d-m-Y', strtotime($ord['created_at'])); ?></td>
+                                <td class="fw-bold text-success">Rs. <?= number_format((float)$ord['total_amount'], 2); ?></td>
+                                <td class="small"><?= htmlspecialchars($ord['delivery_address']); ?></td>
+                                <td class="small text-muted"><?= date('g:i A, d-m-Y', strtotime($ord['created_at'])); ?></td>
                                 <td>
                                     <?php 
-                                    $st = strtolower($ord['order_status']);
-                                    if ($st === 'pending') echo '<span class="badge bg-warning text-dark">Pending</span>';
-                                    elseif ($st === 'dispatched') echo '<span class="badge bg-info text-dark">Dispatched</span>';
-                                    elseif ($st === 'delivered') echo '<span class="badge bg-success">Delivered</span>';
-                                    else echo '<span class="badge bg-secondary">' . htmlspecialchars($ord['order_status']) . '</span>';
+                                    if ($st === 'pending') {
+                                        echo '<span class="badge bg-warning text-dark">Pending Packing</span>';
+                                    } elseif ($st === 'dispatched') {
+                                        echo '<span class="badge bg-info text-dark">Dispatched (Awaiting Rider)</span>';
+                                    } elseif ($st === 'out for delivery') {
+                                        echo '<span class="badge bg-primary">🛵 Out for Delivery</span>';
+                                    } elseif ($st === 'delivered') {
+                                        echo '<span class="badge bg-success">✅ Delivered</span>';
+                                    } else {
+                                        echo '<span class="badge bg-secondary">' . htmlspecialchars(ucfirst($ord['order_status'])) . '</span>';
+                                    }
                                     ?>
                                 </td>
+                                <td>
+                                    <?php if (!empty($ord['rider_name'])): ?>
+                                        <span class="fw-bold text-dark d-block">🚴 <?= htmlspecialchars($ord['rider_name']); ?></span>
+                                        <small class="text-muted">📞 <?= htmlspecialchars($ord['rider_phone'] ?? 'N/A'); ?></small>
+                                    <?php else: ?>
+                                        <span class="text-muted small">Awaiting Rider</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td class="text-center">
-                                    <form action="orders.php" method="POST" class="d-flex align-items-center justify-content-center gap-1 m-0">
-                                        <input type="hidden" name="order_id" value="<?= $ord['id']; ?>">
-                                        <select name="status" class="form-select form-select-sm" style="width: 130px;">
-                                            <option value="pending" <?= $st === 'pending' ? 'selected' : ''; ?>>Pending</option>
-                                            <option value="dispatched" <?= $st === 'dispatched' ? 'selected' : ''; ?>>Dispatched</option>
-                                            <option value="delivered" <?= $st === 'delivered' ? 'selected' : ''; ?>>Delivered</option>
-                                        </select>
-                                        <button type="submit" class="btn btn-sm btn-primary fw-bold">Save</button>
-                                    </form>
+                                    <?php if ($st === 'pending'): ?>
+                                        <form action="orders.php" method="POST" class="m-0">
+                                            <input type="hidden" name="order_id" value="<?= $ord['id']; ?>">
+                                            <input type="hidden" name="action" value="dispatch">
+                                            <button type="submit" class="btn btn-sm btn-success fw-bold px-3">
+                                                📦 Mark Dispatched
+                                            </button>
+                                        </form>
+                                    <?php elseif ($st === 'dispatched' || $st === 'out for delivery'): ?>
+                                        <span class="badge bg-light text-primary border border-primary px-2 py-1 small">In Rider Pipeline</span>
+                                    <?php elseif ($st === 'delivered'): ?>
+                                        <span class="badge bg-light text-success border border-success px-2 py-1 small">Completed</span>
+                                    <?php else: ?>
+                                        <span class="badge bg-light text-secondary border px-2 py-1 small">In Progress</span>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                             <?php endwhile; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="7" class="text-center py-4 text-muted">No customer orders received yet.</td>
+                                <td colspan="8" class="text-center py-4 text-muted">No incoming customer orders found.</td>
                             </tr>
                         <?php endif; ?>
                     </tbody>
@@ -121,7 +148,7 @@ $orders_result = $stmt->get_result();
 </div>
 
 <?php
-$stmt->close();
+$o_stmt->close();
 $conn->close();
 include_once '../includes/footer.php';
 ?>

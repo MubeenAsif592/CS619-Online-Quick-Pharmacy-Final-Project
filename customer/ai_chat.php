@@ -22,7 +22,7 @@ if (!isset($_SESSION['ai_chat_history']) || !is_array($_SESSION['ai_chat_history
     ];
 }
 
-// Action to clear conversation history
+// Clear conversation history
 if (isset($_GET['action']) && $_GET['action'] === 'clear') {
     $_SESSION['ai_chat_history'] = [];
     header("Location: ai_chat.php");
@@ -30,12 +30,85 @@ if (isset($_GET['action']) && $_GET['action'] === 'clear') {
 }
 
 /**
- * Call OpenRouter / GroqCloud API for medical responses (FR8)
+ * Enhanced Local Database Recommendation Engine with Keyword Mapping
+ */
+function getLocalDatabaseRecommendation($user_input, $conn) {
+    $raw_input = strtolower(trim($user_input));
+    
+    // Smart Keyword Mapping for Common Health Queries
+    $search_terms = [$raw_input];
+    if (str_contains($raw_input, 'pain') || str_contains($raw_input, 'killer') || str_contains($raw_input, 'headache')) {
+        $search_terms = array_merge($search_terms, ['pain', 'killer', 'panadol', 'paracetamol', 'brufen', 'ibuprofen', 'disprin', 'relief']);
+    } elseif (str_contains($raw_input, 'fever') || str_contains($raw_input, 'flu')) {
+        $search_terms = array_merge($search_terms, ['fever', 'panadol', 'paracetamol', 'calpol', 'flu']);
+    } elseif (str_contains($raw_input, 'cough') || str_contains($raw_input, 'cold')) {
+        $search_terms = array_merge($search_terms, ['cough', 'syrup', 'cold', 'syp']);
+    }
+
+    $where_clauses = [];
+    $params = [];
+    $types = "";
+
+    foreach ($search_terms as $term) {
+        $where_clauses[] = "(LOWER(m.medicine_name) LIKE ? OR LOWER(m.category) LIKE ? OR LOWER(m.description) LIKE ?)";
+        $like_val = "%" . $term . "%";
+        $params[] = $like_val;
+        $params[] = $like_val;
+        $params[] = $like_val;
+        $types .= "sss";
+    }
+
+    $sql = "SELECT m.medicine_name, m.price, m.stock_quantity, COALESCE(p.pharmacy_name, 'Quick Pharmacy Store') AS pharmacy_name 
+            FROM medicines m 
+            LEFT JOIN pharmacies p ON m.pharmacy_id = p.id 
+            WHERE (" . implode(" OR ", $where_clauses) . ") 
+            ORDER BY m.stock_quantity DESC, m.price ASC LIMIT 5";
+
+    $stmt = $conn->prepare($sql);
+    if ($stmt) {
+        $stmt->bind_param($types, ...$params);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        
+        $meds = [];
+        while ($r = $res->fetch_assoc()) {
+            $meds[] = $r;
+        }
+        $stmt->close();
+
+        if (!empty($meds)) {
+            $reply = "Here are matching available medicines for '" . htmlspecialchars($user_input) . "' from Quick Pharmacy:\n\n";
+            foreach ($meds as $med) {
+                $reply .= "• **" . htmlspecialchars($med['medicine_name']) . "** — Rs. " . number_format($med['price'], 2) . " (Pharmacy: *" . htmlspecialchars($med['pharmacy_name']) . "*, Stock: " . $med['stock_quantity'] . " units)\n";
+            }
+            $reply .= "\n⚠️ *Disclaimer: Please consult a doctor for official treatment and dosage instructions.*";
+            return $reply;
+        }
+    }
+
+    // General Fallback Query if specific keyword match returns empty
+    $gen_res = $conn->query("SELECT m.medicine_name, m.price, m.stock_quantity, COALESCE(p.pharmacy_name, 'Quick Pharmacy Store') AS pharmacy_name 
+                             FROM medicines m 
+                             LEFT JOIN pharmacies p ON m.pharmacy_id = p.id 
+                             ORDER BY m.id DESC LIMIT 3");
+    if ($gen_res && $gen_res->num_rows > 0) {
+        $reply = "We couldn't find exact matches for '" . htmlspecialchars($user_input) . "', but here are top featured medicines in stock:\n\n";
+        while ($r = $gen_res->fetch_assoc()) {
+            $reply .= "• **" . htmlspecialchars($r['medicine_name']) . "** — Rs. " . number_format($r['price'], 2) . " (Stock: " . $r['stock_quantity'] . ")\n";
+        }
+        $reply .= "\n⚠️ *Disclaimer: Information provided is for general awareness.*";
+        return $reply;
+    }
+
+    return "For query '" . htmlspecialchars($user_input) . "', please search our **Search Medicines** page or consult a certified physician.\n\n⚠️ *Disclaimer: Information provided is for general awareness.*";
+}
+
+/**
+ * Call External Medical AI API (OpenRouter) with Smart Local Fallback
  */
 function callExternalMedicalAI($user_prompt, $db_medicines, $conn) {
     $apiKey = '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';
 
-    // Verification check for missing key
     if (empty($apiKey) || str_contains($apiKey, 'YOUR_OPENROUTER')) {
         return getLocalDatabaseRecommendation($user_prompt, $conn);
     }
@@ -45,6 +118,7 @@ function callExternalMedicalAI($user_prompt, $db_medicines, $conn) {
     $systemContext = "You are an AI Medical Assistant for an online pharmacy app 'Quick Pharmacy'. "
         . "Answer health questions concisely and accurately. "
         . "In-stock medicines in local database: [" . $db_medicines . "]. "
+        . "If the user asks for pain killer, headache, or fever, recommend suitable medicines from the database. "
         . "Always include a brief disclaimer to consult a licensed medical professional.";
 
     $payload = [
@@ -59,7 +133,7 @@ function callExternalMedicalAI($user_prompt, $db_medicines, $conn) {
     $ch = curl_init($apiUrl);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 6);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         "Authorization: Bearer " . $apiKey,
         "Content-Type: application/json",
@@ -80,43 +154,7 @@ function callExternalMedicalAI($user_prompt, $db_medicines, $conn) {
         }
     }
 
-    // Smart Fallback if OpenRouter API is rate-limited or unavailable
     return getLocalDatabaseRecommendation($user_prompt, $conn);
-}
-
-/**
- * Local Database Recommendation Fallback Engine
- */
-function getLocalDatabaseRecommendation($user_input, $conn) {
-    $input = strtolower(trim($user_input));
-    
-    $stmt = $conn->prepare("SELECT m.medicine_name, m.price, m.stock_quantity, COALESCE(p.pharmacy_name, u.full_name) AS pharmacy_name 
-                            FROM medicines m 
-                            JOIN pharmacies p ON m.pharmacy_id = p.id 
-                            JOIN users u ON p.user_id = u.id 
-                            WHERE m.medicine_name LIKE ? OR m.category LIKE ? OR m.description LIKE ?
-                            ORDER BY m.price ASC LIMIT 5");
-    $like_val = "%" . $input . "%";
-    $stmt->bind_param("sss", $like_val, $like_val, $like_val);
-    $stmt->execute();
-    $res = $stmt->get_result();
-    
-    $meds = [];
-    while ($r = $res->fetch_assoc()) {
-        $meds[] = $r;
-    }
-    $stmt->close();
-
-    if (!empty($meds)) {
-        $reply = "Here are matching available medicines from our Quick Pharmacy database:\n\n";
-        foreach ($meds as $med) {
-            $reply .= "• **" . htmlspecialchars($med['medicine_name']) . "** — Rs. " . number_format($med['price'], 2) . " (Pharmacy: *" . htmlspecialchars($med['pharmacy_name']) . "*, Stock: " . $med['stock_quantity'] . " units)\n";
-        }
-        $reply .= "\n⚠️ *Disclaimer: Please consult a doctor for official treatment and dosage instructions.*";
-        return $reply;
-    }
-
-    return "For query '" . htmlspecialchars($user_input) . "', please search our **Search Medicines** page or consult a certified physician.\n\n⚠️ *Disclaimer: Information provided is for general awareness.*";
 }
 
 // Process Form Submit
@@ -124,16 +162,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_query'])) {
     $user_query = trim($_POST['user_query']);
 
     if (!empty($user_query)) {
-        // Log user message
         $_SESSION['ai_chat_history'][] = [
             'role' => 'user',
             'message' => $user_query,
             'time' => date('g:i A')
         ];
 
-        // Fetch live database context (in-stock medicines)
+        // Fetch live database context
         $med_list = [];
-        $res = $conn->query("SELECT medicine_name, category FROM medicines WHERE stock_quantity > 0 LIMIT 15");
+        $res = $conn->query("SELECT medicine_name, category FROM medicines WHERE stock_quantity > 0 LIMIT 20");
         if ($res && $res->num_rows > 0) {
             while ($r = $res->fetch_assoc()) {
                 $med_list[] = $r['medicine_name'] . " (" . $r['category'] . ")";
@@ -141,10 +178,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_query'])) {
         }
         $db_meds = implode(", ", $med_list);
 
-        // Call External API with Fallback
         $ai_reply = callExternalMedicalAI($user_query, $db_meds, $conn);
 
-        // Log AI assistant response
         $_SESSION['ai_chat_history'][] = [
             'role' => 'assistant',
             'message' => $ai_reply,

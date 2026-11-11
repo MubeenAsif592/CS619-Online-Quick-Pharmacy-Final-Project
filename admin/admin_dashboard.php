@@ -67,7 +67,7 @@ if ($r3) {
 
     <!-- Core Action Modules -->
     <div class="row g-4">
-        <div class="col-md-6">
+        <div class="col-md-4">
             <div class="card bg-dark text-white p-3 shadow-sm h-100 border-0">
                 <div class="card-body d-flex flex-column justify-content-between p-0">
                     <div>
@@ -79,7 +79,7 @@ if ($r3) {
             </div>
         </div>
 
-        <div class="col-md-6">
+        <div class="col-md-4">
             <div class="card bg-secondary text-white p-3 shadow-sm h-100 border-0">
                 <div class="card-body d-flex flex-column justify-content-between p-0">
                     <div>
@@ -87,6 +87,18 @@ if ($r3) {
                         <p class="mb-0 text-white-50">Issue promotional discount credits directly into customer wallets for system campaigns.</p>
                     </div>
                     <a href="promotions.php" class="btn btn-dark btn-sm mt-4 fw-bold">Manage Promotions</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card bg-success text-white p-3 shadow-sm h-100 border-0">
+                <div class="card-body d-flex flex-column justify-content-between p-0">
+                    <div>
+                        <h5 class="fw-bold mb-2">System Reports (FR14)</h5>
+                        <p class="mb-0 text-white-50">View sales analytics, low-stock inventory alerts, wallet transaction logs, and ratings.</p>
+                    </div>
+                    <a href="reports.php" class="btn btn-dark btn-sm mt-4 fw-bold">📊 Open Reports</a>
                 </div>
             </div>
         </div>

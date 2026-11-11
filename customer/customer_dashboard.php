@@ -110,9 +110,9 @@ $orders_result = $o_stmt->get_result();
             <h5 class="mb-0 fw-bold">📦 My Active Orders & Live Tracking</h5>
             <div>
                 <?php if ($show_delivered): ?>
-                    <a href="customer_dashboard.php" class="btn btn-sm btn-outline-light">Hide Delivered Orders</a>
+                    <a href="customer_dashboard.php" class="btn btn-sm btn-outline-light fw-bold">Hide Delivered Orders</a>
                 <?php else: ?>
-                    <a href="customer_dashboard.php?show_delivered=1" class="btn btn-sm btn-outline-light">Show Delivered Orders</a>
+                    <a href="customer_dashboard.php?show_delivered=1" class="btn btn-sm btn-outline-light fw-bold">Show Delivered Orders</a>
                 <?php endif; ?>
             </div>
         </div>
@@ -132,26 +132,36 @@ $orders_result = $o_stmt->get_result();
                     <tbody>
                         <?php if ($orders_result && $orders_result->num_rows > 0): ?>
                             <?php while ($ord = $orders_result->fetch_assoc()): ?>
-                            <tr>
-                                <td class="fw-bold">#ORD-<?= $ord['id']; ?></td>
-                                <td class="fw-bold text-primary"><?= htmlspecialchars($ord['pharmacy_name']); ?></td>
-                                <td class="text-success fw-bold">Rs. <?= number_format((float)$ord['total_amount'], 2); ?></td>
-                                <td class="small"><?= date('g:i A, d-m-Y', strtotime($ord['created_at'])); ?></td>
-                                <td>
-                                    <?php 
-                                    $st = strtolower($ord['order_status']);
-                                    if ($st === 'pending') echo '<span class="badge bg-warning text-dark">Pending</span>';
-                                    elseif ($st === 'dispatched' || $st === 'out for delivery') echo '<span class="badge bg-info text-dark">Out for Delivery</span>';
-                                    elseif ($st === 'delivered') echo '<span class="badge bg-success">Delivered</span>';
-                                    else echo '<span class="badge bg-secondary">' . htmlspecialchars($ord['order_status']) . '</span>';
-                                    ?>
-                                </td>
-                                <td class="text-center">
-                                    <a href="map_track.php?id=<?= $ord['id']; ?>" class="btn btn-sm btn-success fw-bold px-3">
-    📍 Track Order
-</a>
-                                </td>
-                            </tr>
+                                <?php $st = strtolower($ord['order_status']); ?>
+                                <tr>
+                                    <td class="fw-bold">#ORD-<?= $ord['id']; ?></td>
+                                    <td class="fw-bold text-primary"><?= htmlspecialchars($ord['pharmacy_name']); ?></td>
+                                    <td class="text-success fw-bold">Rs. <?= number_format((float) $ord['total_amount'], 2); ?></td>
+                                    <td class="small"><?= date('g:i A, d-m-Y', strtotime($ord['created_at'])); ?></td>
+                                    <td>
+                                        <?php
+                                        if ($st === 'pending')
+                                            echo '<span class="badge bg-warning text-dark">Pending</span>';
+                                        elseif ($st === 'dispatched' || $st === 'out for delivery')
+                                            echo '<span class="badge bg-info text-dark">Out for Delivery</span>';
+                                        elseif ($st === 'delivered')
+                                            echo '<span class="badge bg-success">Delivered</span>';
+                                        else
+                                            echo '<span class="badge bg-secondary">' . htmlspecialchars($ord['order_status']) . '</span>';
+                                        ?>
+                                    </td>
+                                    <td class="text-center">
+                                        <?php if ($st === 'delivered'): ?>
+                                            <!-- FR15: Rate Order Button -->
+                                            <a href="feedback.php?order_id=<?= $ord['id']; ?>" class="btn btn-sm btn-outline-warning fw-bold me-1">
+                                                ⭐ Rate Order
+                                            </a>
+                                        <?php endif; ?>
+                                        <a href="map_track.php?id=<?= $ord['id']; ?>" class="btn btn-sm btn-success fw-bold px-3">
+                                            📍 Track Order
+                                        </a>
+                                    </td>
+                                </tr>
                             <?php endwhile; ?>
                         <?php else: ?>
                             <tr>

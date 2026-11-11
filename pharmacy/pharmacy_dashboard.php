@@ -44,8 +44,8 @@ $val_stmt->close();
 <div class="container my-5">
     <!-- Header -->
     <div class="card bg-success text-white p-4 shadow-sm mb-4 border-0">
-        <h2 class=" fw-bold">Pharmacy Panel - <?= htmlspecialchars($pharmacy_name); ?></h2>
-        <p class="mb-0">Overview of inventory analytics, incoming orders, and marketing wallet.</p>
+        <h2 class="fw-bold">Pharmacy Panel - <?= htmlspecialchars($pharmacy_name); ?></h2>
+        <p class="mb-0">Overview of inventory analytics, incoming orders, and customer ratings.</p>
     </div>
 
     <!-- Live Analytics Counter Cards -->
@@ -102,22 +102,23 @@ $val_stmt->close();
                         <h5 class="fw-bold mb-2">Orders Received</h5>
                         <p class="mb-0 text-white-50">View & process incoming customer orders.</p>
                     </div>
-<a href="orders.php" class="btn btn-dark btn-sm mt-4 fw-bold">View Orders</a>                </div>
+                    <a href="orders.php" class="btn btn-dark btn-sm mt-4 fw-bold">View Orders</a>
+                </div>
             </div>
         </div>
 
-        <!-- 3. Marketing Wallet
+        <!-- 3. Customer Ratings & Reviews (FR15) -->
         <div class="col-md-4">
             <div class="card bg-warning text-dark p-3 shadow-sm h-100 border-0">
                 <div class="card-body d-flex flex-column justify-content-between p-0">
                     <div>
-                        <h5 class="fw-bold mb-2">Marketing Wallet</h5>
-                        <p class="mb-0 text-dark-50">Manage promotional budget & ad credits.</p>
+                        <h5 class="fw-bold mb-2">Customer Feedback</h5>
+                        <p class="mb-0 text-dark-50">View ratings & feedback submitted by customers.</p>
                     </div>
-                    <a href="#" class="btn btn-dark btn-sm mt-4 fw-bold">Manage Wallet</a>
+                    <a href="reviews.php" class="btn btn-dark btn-sm mt-4 fw-bold text-white">⭐ View Reviews</a>
                 </div>
             </div>
-        </div> -->
+        </div>
     </div>
 </div>
 
